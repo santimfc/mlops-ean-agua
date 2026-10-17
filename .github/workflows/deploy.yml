@@ -1,0 +1,71 @@
+# Despliegue automático de la API en Azure Container Apps
+# Se ejecuta en cada push a main (excepto si solo cambia index.html) o a mano desde la pestaña Actions
+name: Desplegar API Calidad del Agua en Azure
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["index.html"]   # el frontend vive en Storage, no requiere reconstruir el Docker
+  workflow_dispatch:
+
+env:
+  RESOURCE_GROUP: rg-agua-irca          # ⚠️ grupo de recursos (créelo antes en Azure)
+  ACR_NAME: acraguairca                 # ⚠️ Container Registry: nombre ÚNICO en todo Azure, solo minúsculas y números
+  ENVIRONMENT: env-agua-irca            # ⚠️ entorno de Container Apps (créelo antes en Azure)
+  APP_NAME: api-agua-irca               # la API se crea sola la primera vez
+  IMAGE: acraguairca.azurecr.io/api-agua-irca:${{ github.sha }}   # ⚠️ debe repetir ACR_NAME y APP_NAME
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Descarga el código del repositorio
+      - uses: actions/checkout@v4
+
+      # 2. Inicia sesión en Azure con la cuenta de servicio
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # 3. Construye la imagen Docker y la sube al Container Registry
+      - name: Construir y subir imagen
+        run: |
+          az acr login --name $ACR_NAME
+          docker build -t $IMAGE .
+          docker push $IMAGE
+
+      # 4. Crea la Container App la primera vez; las siguientes solo la actualiza
+      - name: Crear o actualizar la API
+        env:
+          DB_URL: ${{ secrets.DATABRICKS_URL }}
+          DB_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          if az containerapp show -n $APP_NAME -g $RESOURCE_GROUP > /dev/null 2>&1; then
+            echo "La API ya existe: se actualiza"
+            az containerapp secret set -n $APP_NAME -g $RESOURCE_GROUP \
+              --secrets databricks-url="$DB_URL" databricks-token="$DB_TOKEN"
+            az containerapp update -n $APP_NAME -g $RESOURCE_GROUP --image $IMAGE
+          else
+            echo "Primera vez: se crea la API"
+            ACR_PASSWORD=$(az acr credential show -n $ACR_NAME --query "passwords[0].value" -o tsv)
+            az containerapp create -n $APP_NAME -g $RESOURCE_GROUP \
+              --environment $ENVIRONMENT \
+              --image $IMAGE \
+              --registry-server $ACR_NAME.azurecr.io \
+              --registry-username $ACR_NAME \
+              --registry-password "$ACR_PASSWORD" \
+              --target-port 8000 \
+              --ingress external \
+              --min-replicas 0 \
+              --max-replicas 1 \
+              --secrets databricks-url="$DB_URL" databricks-token="$DB_TOKEN" \
+              --env-vars DATABRICKS_URL=secretref:databricks-url DATABRICKS_TOKEN=secretref:databricks-token
+          fi
+
+      # 5. Muestra la URL pública de la API
+      - name: URL de la API
+        run: |
+          FQDN=$(az containerapp show -n $APP_NAME -g $RESOURCE_GROUP --query properties.configuration.ingress.fqdn -o tsv)
+          echo "API publicada en: https://$FQDN"
+          echo "Pruebe: https://$FQDN/health"
+          echo "Documentación: https://$FQDN/docs"
