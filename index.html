@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Calidad del Agua · IRCA</title>
+<title>Alerta de Deterioro · IRCA</title>
 <style>
   :root { --bg:#f4f7f9; --card:#fff; --txt:#1d2b36; --muted:#5b6b78; --accent:#0b6e99; --ok:#1e7d4f; --bad:#b4532a; --line:#d8e1e8; }
   * { box-sizing:border-box; }
@@ -25,7 +25,7 @@
 </head>
 <body>
 <main>
-  <h1>¿El agua del municipio será apta el próximo año?</h1>
+  <h1>¿La calidad del agua del municipio empeorará el próximo año?</h1>
   <p class="sub">Ingrese el historial del municipio. Deje vacío un campo opcional si no hay dato (ND).</p>
 
   <form id="f">
@@ -46,12 +46,12 @@
   </form>
 
   <div id="res"></div>
-  <p><small>Ejemplo precargado: Medellín, datos para predecir 2024. La primera consulta puede tardar hasta 2 minutos (arranque en frío).</small></p>
+  <p><small>Ejemplo precargado: Medellín, datos para predecir 2024 (resultado esperado: estable). La primera consulta puede tardar hasta 2 minutos (arranque en frío).</small></p>
 </main>
 
 <script>
   // ⚠️ Cambiar por la URL que imprime GitHub Actions (paso "URL de la API")
-  const API_URL = "https://api-agua-irca.XXXX.azurecontainerapps.io";
+  const API_URL = "https://api-agua-irca.mangofield-79fb8e75.westus.azurecontainerapps.io";
 
   const f = document.getElementById("f"), res = document.getElementById("res"), btn = document.getElementById("btn");
   const num = (v) => (v === "" ? null : Number(v));
@@ -83,7 +83,7 @@
       });
       const j = await r.json();
       if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail));
-      res.className = j.prediccion === 1 ? "ok" : "bad";
+      res.className = j.prediccion === 1 ? "bad" : "ok";   // 1 = empeora (alerta) · 0 = estable
       res.textContent = j.resultado;
     } catch (err) {
       res.className = "err";

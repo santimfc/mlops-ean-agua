@@ -1,4 +1,5 @@
 # API FastAPI que recibe el historial de un municipio y consulta el endpoint AGUA_IRCA de Databricks
+# Modelo: alerta temprana de deterioro de la calidad del agua (¿sube de categoría de riesgo IRCA?)
 import os
 from typing import Optional
 
@@ -12,8 +13,8 @@ DATABRICKS_URL = os.getenv("DATABRICKS_URL")
 DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN")
 
 app = FastAPI(
-    title="API Calidad del Agua (IRCA)",
-    description="Predice si el agua de un municipio será apta para consumo humano (IRCA ≤ 5) el próximo año",
+    title="API Alerta de Deterioro del Agua (IRCA)",
+    description="Predice si la calidad del agua de un municipio empeorará el próximo año (sube de categoría de riesgo IRCA)",
 )
 
 # Permite que el frontend (index.html) llame a la API desde otro dominio
@@ -71,9 +72,9 @@ def predecir(mun: Municipio):
     if r.status_code != 200:
         raise HTTPException(status_code=502, detail=f"Error de Databricks: {r.text}")
 
-    pred = int(r.json()["predictions"][0])  # 1 = agua apta, 0 = con riesgo
+    pred = int(r.json()["predictions"][0])  # 1 = empeora, 0 = estable
     return {
         "prediccion": pred,
-        "resultado": "Agua apta para consumo ✅" if pred == 1 else "Agua con riesgo ⚠️",
+        "resultado": "⚠️ Alerta: riesgo de deterioro el próximo año" if pred == 1 else "✅ Estable: no se espera deterioro",
         "datos_recibidos": mun.model_dump(),
     }
